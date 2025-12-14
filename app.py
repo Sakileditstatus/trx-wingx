@@ -4,12 +4,19 @@ import time
 from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify, request
 
-# Try to import cloudscraper for Cloudflare bypass, fallback to requests if not available
+# Try to import curl_cffi for Cloudflare bypass (works in serverless), fallback to cloudscraper, then requests
+USE_CURL_CFFI = False
+USE_CLOUDSCRAPER = False
+
 try:
-    import cloudscraper  # type: ignore
-    USE_CLOUDSCRAPER = True
+    from curl_cffi import requests as curl_requests  # type: ignore
+    USE_CURL_CFFI = True
 except ImportError:
-    USE_CLOUDSCRAPER = False
+    try:
+        import cloudscraper  # type: ignore
+        USE_CLOUDSCRAPER = True
+    except ImportError:
+        pass
 
 # Initialize Flask App
 app = Flask(__name__)
@@ -126,8 +133,18 @@ def get_lottery_history():
     }
     
     try:
-        # Use cloudscraper to bypass Cloudflare protection, fallback to requests
-        if USE_CLOUDSCRAPER:
+        # Use curl_cffi for Cloudflare bypass (best for serverless), fallback to cloudscraper, then requests
+        if USE_CURL_CFFI:
+            # curl_cffi mimics real browser TLS fingerprints to bypass Cloudflare
+            response = curl_requests.get(
+                API_URL, 
+                params=params, 
+                headers=headers, 
+                timeout=15, 
+                allow_redirects=True,
+                impersonate="chrome119"  # Mimic Chrome 119 browser
+            )
+        elif USE_CLOUDSCRAPER:
             scraper = cloudscraper.create_scraper()
             scraper.headers.update(headers)
             response = scraper.get(API_URL, params=params, timeout=15, allow_redirects=True)
@@ -250,8 +267,16 @@ def get_issue_info():
     }
     
     try:
-        # Use cloudscraper to bypass Cloudflare protection, fallback to requests
-        if USE_CLOUDSCRAPER:
+        # Use curl_cffi for Cloudflare bypass (best for serverless), fallback to cloudscraper, then requests
+        if USE_CURL_CFFI:
+            response = curl_requests.get(
+                url, 
+                headers=headers, 
+                timeout=15, 
+                allow_redirects=True,
+                impersonate="chrome119"
+            )
+        elif USE_CLOUDSCRAPER:
             scraper = cloudscraper.create_scraper()
             scraper.headers.update(headers)
             response = scraper.get(url, timeout=15, allow_redirects=True)
@@ -469,8 +494,17 @@ def get_trend_statistics():
     }
     
     try:
-        # Use cloudscraper to bypass Cloudflare protection, fallback to requests
-        if USE_CLOUDSCRAPER:
+        # Use curl_cffi for Cloudflare bypass (best for serverless), fallback to cloudscraper, then requests
+        if USE_CURL_CFFI:
+            response = curl_requests.get(
+                STATS_API_URL, 
+                params=params, 
+                headers=headers, 
+                timeout=15, 
+                allow_redirects=True,
+                impersonate="chrome119"
+            )
+        elif USE_CLOUDSCRAPER:
             scraper = cloudscraper.create_scraper()
             scraper.headers.update(headers)
             response = scraper.get(STATS_API_URL, params=params, timeout=15, allow_redirects=True)
